@@ -1,0 +1,93 @@
+k## Question 3 Imputing missing values  
+
+Data loading  
+
+```{r data_loading, echo = TRUE}
+dat <- read.csv(file = "./activity.csv") # with stringsAsFactors = FALSE
+```
+
+### Q3.1 Calculate and report the total number of missing values in the dataset (i.e. the total number of rows with NAs)  
+
+```{r, number_of_missing_val, echo = TRUE}
+paste("total number of missing values in data:", sum(is.na(dat)))
+paste("number of missing values in steps:", sum(is.na(dat$steps)))
+paste("number of missing values in interva:", sum(is.na(dat$interval)))
+paste("number of missing values in date:", sum(is.na(dat$date)))
+```
+As a result, you have now known all missing data (NA) lie in steps.  
+
+### Q3-2. Devise a strategy for filling in all of the missing values in the dataset. The strategy does not need to be sophisticated. For example, you could use the mean/median for that day, or the mean for that 5-minute interval, etc.  
+
+```{r, investigation_on_data_filling, echo = TRUE}
+dat.d <- dat[is.na(dat$steps), ]$date
+dat.i <- dat[is.na(dat$steps), ]$interval
+# how many NAs does each day have?
+table(droplevels(dat.d)) 
+
+# how many NAs does each interval have?
+tb <- table(dat.i)
+print(tb)
+
+# just to make sure that every interval has unique number of missing value: 8
+sum(tb != tb[[1]]) # --> 0, 
+```
+Based on those analyses, we now know there are 8 days with NA's values, and each of which has the same total number of missing values: 288, and as to interval, each 288 interval has the same missing values:8, respectively.It turns out NA values are evenly distributed across missing interval and date.  Now, my strategy is to prepate a data set of an average steps for interval, and fill NA with the value.  
+
+### Q3-3. Create a new dataset that is equal to the original dataset but with the missing data filled in.  
+
+My strategy is **to prepare a data set of the average steps at the each point of interval, which is calculated only from available values except NA in the original data set**, and fill missing values with it.
+
+
+```{r, generate_new_dataset, echo = TRUE}
+ave.steps.by.intv <- aggregate(steps ~ interval, data = dat,
+                               function(x) mean(x, na.rm = TRUE))
+
+# rename data frame so it makes easier to understand operations onwards.
+target.df <- dat
+new.val.df <- ave.steps.by.intv
+
+lv <- levels(droplevels(dat.d))
+
+# fill with an averege steps for NA's interval for each NA's date.
+for (ymd in lv) { # NA's date: "2012-10-01", "2012-10-08"..
+    tmp.df <- target.df[target.df$date == ymd, ]
+    for (i in new.val.df$interval) { # 0, 5, 10, ... 2355
+        new.v <- new.val.df[ new.val.df$interval == i, ]$steps
+        target.df[target.df$date == ymd & target.df$interval == i, ]$steps <- new.v
+    }
+}
+```
+Now you've got an updated data.frame: **target.df.**
+
+
+### Q3-4. Make a histogram of the total number of steps taken each day and Calculate and report the mean and median total number of steps taken per day.Do these values differ from the estimates from the first part of the assignment? What is the impact of imputing missing data on the estimates of the total daily number of steps?  
+
+
+```{r histogram_of_updated_data, echo = TRUE, fig.height = 5, fig.width = 10}
+# calculate average steps for each interval using the updated data.frame.
+ave.steps.by.intv.adj <- aggregate(steps ~ interval, data = target.df,
+                                   function(x) mean(x, na.rm = TRUE))
+library(ggplot2)
+g <- ggplot(data = ave.steps.by.intv.adj, aes(x = interval, y = steps))
+g <- g + geom_line(color = "blue")
+g <- g + ggtitle("Average number of steps taken for the 5-minute interval (updated data")
+print (g)
+```
+
+Here are the mean and median for **the updated data** set.  
+```{r, new_mean_and_median, echo = TRUE}
+mean(ave.steps.by.intv.adj$steps)
+median(ave.steps.by.intv.adj$steps)
+```
+
+And those for **the original data** set.  
+```{r, orig_mean_and_median, echo = TRUE}
+mean(ave.steps.by.intv$steps)
+median(ave.steps.by.intv$steps)
+```
+
+With my approach to fill missing values with the average steps at the each point of interval, which is calculated only from available values except NA in the original data set, it turnes out the statistical values of mean, and median from the updated data set does not differ from those from the original.  
+I'd say, with this way of imputing missing values, there would be no impact on the estimate of total number of steps.  
+
+
+

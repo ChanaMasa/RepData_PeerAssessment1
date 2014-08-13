@@ -1,0 +1,34 @@
+## Question 2: What is the average daily activity pattern?
+
+Data loading and calculate steps grouped by interval  
+
+```{r data_loading, echo = TRUE}
+dat <- read.csv(file = "./activity.csv") # with stringsAsFactors = FALSE
+str(dat)
+# get steps group by "interval"
+ave.steps.by.intv <- aggregate(steps ~ interval, data = dat, function(x) mean(x, na.rm = TRUE)) 
+```
+
+### Q2-1. Make a time series plot (i.e. type = "l") of the 5-minute interval (x-axis) and the average number of steps taken, averaged across all days (y-axis)  
+
+```{r timeseries_plot, echo = TRUE, fig.height = 5, fig.width = 10}
+library(ggplot2)
+g <- ggplot(data = ave.steps.by.intv, aes(x = interval, y = steps))
+g <- g + geom_line(color = "blue")
+g <- g + ggtitle("Average number of steps taken for the 5-minute interval")
+print (g)
+```
+
+### Q2-2. Which 5-minute interval, on average across all the days in the dataset, contains the maximum number of steps?  
+
+```{r max_number_of_steps, echo = TRUE}
+ave.steps.by.intv[ave.steps.by.intv$steps ==  max(ave.steps.by.intv$steps), ]
+
+paste("the max number of steps: ",
+      ave.steps.by.intv[ave.steps.by.intv$steps ==  max(ave.steps.by.intv$steps), ][[2]])
+paste("the 5-minutes interval containing it is: ",
+      ave.steps.by.intv[ave.steps.by.intv$steps ==  max(ave.steps.by.intv$steps), ][[1]])
+paste("and that's the ",
+      rownames(ave.steps.by.intv[ave.steps.by.intv$steps ==  max(ave.steps.by.intv$steps), ]),
+      "th value of 5-minutes interval.", sep = "")
+```
