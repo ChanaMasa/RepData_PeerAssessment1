@@ -1,0 +1,250 @@
+## Question 1. What is mean total number of steps taken per day?  
+
+### Q1-1. histogram of the total number of steps taken each day  
+
+```{r data_loading, echo = TRUE}
+dat <- read.csv(file = "./activity.csv") # with stringsAsFactors = TRUE
+sum.steps <- with(dat, tapply(steps, list(date), function(x) sum(x, na.rm = TRUE) ))
+```
+Here goes the histogram.  
+```{r histogram, echo = TRUE, fig.height = 6, fig.width = 8}
+library(ggplot2)
+sum.steps.df <- data.frame(ymd = names(sum.steps), steps = sum.steps)
+rownames(sum.steps.df) <- 1:nrow(sum.steps)
+g <- ggplot(data = sum.steps.df, aes(x = steps))
+g <- g + geom_histogram(color = "white", fill = "navyblue", binwidth = 2000)
+g <- g + ggtitle("Total number of steps taken per day.")
+g <- g + scale_x_continuous(name = "Steps",
+                            limits = c(0, 25000), 
+                            breaks = seq(0, 25000, 5000))
+g <- g + scale_y_continuous(name = "Count",
+                            limits = c(0, 20), 
+                            breaks = seq(0, 20, 5))
+g <- g + theme(plot.title = element_text(size = 16, face = "bold"))
+g <- g + theme(axis.title.x = element_text(size = 14, face = "bold"),
+	           axis.text.x = element_text(size = 14, face = "bold"))
+g <- g + theme(axis.title.y = element_text(size = 14, face = "bold"),
+	           axis.text.y = element_text(size = 14, face = "bold"))
+print(g)
+```
+
+### Q1-2. Mean and median total number of steps taken per day
+
+And mean and median, respectively.  
+```{r mean_and_median, echo = TRUE}
+mean(sum.steps.df$steps)
+median(sum.steps.df$steps)
+```
+## Question 2: What is the average daily activity pattern?
+
+### Q2-1. Make a time series plot (i.e. type = "l") of the 5-minute interval (x-axis) and the average number of steps taken, averaged across all days (y-axis)  
+
+First, calculate number of steps grouped by "interval", and then draw plot.  
+
+```{r time_series_plot, echo = TRUE, fig.height = 5, fig.width = 9}
+ave.steps.by.intv <- aggregate(steps ~ interval, data = dat, function(x) mean(x, na.rm = TRUE))
+g <- ggplot(data = ave.steps.by.intv, aes(x = interval, y = steps))
+g <- g + geom_line()
+g <- g + ggtitle("Average number of steps taken for the 5-minute interval")
+g <- g + scale_x_continuous(name = "5-minutes Interval",
+                            limits = c(0, 2500), 
+                            breaks = seq(0, 2500, 500))
+g <- g + scale_y_continuous(name = "Number of steps",
+                            limits = c(0, 250), 
+                            breaks = seq(0, 250, 50))
+g <- g + theme(plot.title = element_text(size = 16, face = "bold"))
+g <- g + theme(axis.title.x = element_text(size = 14, face = "bold"),
+	           axis.text.x = element_text(size = 14, face = "bold"))
+g <- g + theme(axis.title.y = element_text(size = 14, face = "bold"),
+	           axis.text.y = element_text(size = 14, face = "bold"))
+print (g)
+```
+
+### Q2-2. Which 5-minute interval, on average across all the days in the dataset, contains the maximum number of steps?  
+
+Look for the 5-min interval with the max num of steps.  
+```{r max_number_of_steps, echo = TRUE}
+ave.steps.by.intv[ave.steps.by.intv$steps ==  max(ave.steps.by.intv$steps), ]
+```
+Here is in detail.  
+```{r max_number_of_steps_in_detail, echo = TRUE}
+paste("the 5-minutes interval containing the max value is: ",
+      ave.steps.by.intv[ave.steps.by.intv$steps ==  max(ave.steps.by.intv$steps), ][[1]])
+paste("the max number of steps: ",
+      ave.steps.by.intv[ave.steps.by.intv$steps ==  max(ave.steps.by.intv$steps), ][[2]])
+paste("and that's the ",
+      rownames(ave.steps.by.intv[ave.steps.by.intv$steps ==  max(ave.steps.by.intv$steps), ]),
+      "th value of 5-minutes interval.", sep = "")
+```
+
+## Question 3 Imputing missing values  
+
+### Q3.1 Calculate and report the total number of missing values in the dataset (i.e. the total number of rows with NAs)  
+
+Some analyses about missing values.  
+```{r, number_of_missing_val, echo = TRUE}
+paste("total number of missing values in data:", sum(is.na(dat)))
+paste("number of missing values in steps:", sum(is.na(dat$steps)))
+paste("number of missing values in interva:", sum(is.na(dat$interval)))
+paste("number of missing values in date:", sum(is.na(dat$date)))
+```
+As a result, you have now known all missing data (NA) lie in the column: steps.  
+
+### Q3-2. Devise a strategy for filling in all of the missing values in the dataset. The strategy does not need to be sophisticated. For example, you could use the mean/median for that day, or the mean for that 5-minute interval, etc.  
+
+Calculate number of NAs in date, and those in interval.
+
+How many NAs does each day have?  
+```{r, investigation_on_date, echo = TRUE}
+dat.d <- dat[is.na(dat$steps), ]$date
+dat.i <- dat[is.na(dat$steps), ]$interval
+table(droplevels(dat.d)) 
+```
+And how many NAs does each interval have?  
+```{r, investigation_on_interval, echo = TRUE}
+tb <- table(dat.i)
+print(tb)
+# just to make sure that every interval has unique number of missing value: 8
+sum(tb != tb[[1]]) 
+```
+Based on those analyses, we now know there are 8 days with NA's values, and each of which has the same total number of missing values: 288, and as to interval, each 288 interval has the same missing values: 8, respectively.  
+It turns out NA values are evenly distributed across missing interval and date.  Now, my strategy is to prepate a data set of an average steps for interval, and fill NA with the value.  
+
+### Q3-3. Create a new dataset that is equal to the original dataset but with the missing data filled in.  
+
+My strategy is **to prepare a data set of the average steps at the each point of interval, which is calculated only from available values except NA in the original data set**, and fill missing values with it.
+
+```{r, generate_new_dataset, echo = TRUE}
+ave.steps.by.intv <- aggregate(steps ~ interval, data = dat,
+                               function(x) mean(x, na.rm = TRUE))
+
+# rename data frame so it makes easier to understand operations onwards.
+target.df <- dat
+new.val.df <- ave.steps.by.intv
+
+lv <- levels(droplevels(dat.d))
+
+# fill with an averege steps for NA's interval for each NA's date.
+for (ymd in lv) { # NA's date: "2012-10-01", "2012-10-08"..
+    tmp.df <- target.df[target.df$date == ymd, ]
+    for (i in new.val.df$interval) { # 0, 5, 10, ... 2355
+        new.v <- new.val.df[ new.val.df$interval == i, ]$steps
+        target.df[target.df$date == ymd & target.df$interval == i, ]$steps <- new.v
+    }
+}
+```
+Now you've got an updated data.frame: **target.df.**
+
+
+### Q3-4. Make a histogram of the total number of steps taken each day and Calculate and report the mean and median total number of steps taken per day.Do these values differ from the estimates from the first part of the assignment? What is the impact of imputing missing data on the estimates of the total daily number of steps?  
+
+Here goes the histogram with the updated data.frame.  
+```{r histogram_of_updated_data, echo = TRUE, fig.height = 5, fig.width = 9}
+# calculate average steps for each interval using the updated data.frame.
+ave.steps.by.intv.adj <- aggregate(steps ~ interval, data = target.df,
+                                   function(x) mean(x, na.rm = TRUE))
+g <- ggplot(data = ave.steps.by.intv.adj, aes(x = interval, y = steps))
+g <- g + geom_line(color = "blue")
+g <- g + ggtitle("Average number of steps taken for the 5-minute interval (updated data)")
+g <- g + scale_x_continuous(name = "5-minutes Interval",
+                            limits = c(0, 2500), 
+                            breaks = seq(0, 2500, 500))
+g <- g + scale_y_continuous(name = "Number of steps",
+                            limits = c(0, 250), 
+                            breaks = seq(0, 250, 50))
+g <- g + theme(plot.title = element_text(size = 16, face = "bold"))
+g <- g + theme(axis.title.x = element_text(size = 14, face = "bold"),
+	           axis.text.x = element_text(size = 14, face = "bold"))
+g <- g + theme(axis.title.y = element_text(size = 14, face = "bold"),
+	           axis.text.y = element_text(size = 14, face = "bold"))
+print (g)
+```
+
+Here are the mean and median for **the updated data** set.  
+```{r, new_mean_and_median, echo = TRUE}
+mean(ave.steps.by.intv.adj$steps)
+median(ave.steps.by.intv.adj$steps)
+```
+
+And those for **the original data** set.  
+```{r, orig_mean_and_median, echo = TRUE}
+mean(ave.steps.by.intv$steps)
+median(ave.steps.by.intv$steps)
+```
+
+With my approach to fill missing values with the average steps at the each point of interval, which is calculated only from available values except NA in the original data set, it turnes out the statistical values of mean, and median from the updated data set does not differ from those from the original.  
+I'd say, with this way of imputing missing values, there would be no impact on the estimate of total number of steps.  
+
+
+## Question 4: Are there differences in activity patterns between weekdays and weekends?  
+
+### Q4-1. Create a new factor variable in the dataset with two levels: weekday and weekend - indicating whether a given date is a weekday or weekend day.  
+
+Using POSIXlt and its wday attribute, you will be able to know weekday, and weekend.  
+```{r, dataset_with_weekdays, echo = TRUE}
+# create POSIXlt data
+target.df$date.p <- as.POSIXlt(as.Date(as.character(target.df$date)))
+# 0 is Sunday, 6 is Saturday
+target.df$is.weekend <- target.df$date.p$wday == 0 | target.df$date.p$wday == 6
+
+# split data by is.weekend (TRUE/FALSE)
+sp.wd <- split(target.df, target.df$is.weekend)
+
+ave.steps.by.intv.wd <- aggregate(steps ~ interval, data = sp.wd[[1]],
+                                  function(x) mean(x, na.rm = TRUE))
+ave.steps.by.intv.we <- aggregate(steps ~ interval, data = sp.wd[[2]],
+function(x) mean(x, na.rm = TRUE))
+
+# now create data.frame for each of weekday, and weekend, then union them by rbind.
+wd <- data.frame(week = rep("weekday", nrow(ave.steps.by.intv.wd)), ave.steps.by.intv.wd)
+we <- data.frame(week = rep("weekend", nrow(ave.steps.by.intv.we)), ave.steps.by.intv.we)
+
+ave.steps.by.intv.g <- rbind(wd, we)
+
+str(ave.steps.by.intv.g)
+```
+
+The column **week** in ave.steps.by.intv.g data.frame is a new factor variable with two levels of weekday and weekend.  
+
+
+### Q4-2. Make a panel plot containing a time series plot (i.e. type = "l") of the 5-minute interval (x-axis) and the average number of steps taken, averaged across all weekday days or weekend days (y-axis).   
+
+Here goes a panel plot!  
+
+```{r, panel_plot, echo = TRUE, fig.height = 9, fig.width = 10.5}
+g <- ggplot(data = ave.steps.by.intv.g,
+            aes(x = interval, y = steps, group = week, color = week))
+g <- g + geom_line()
+g <- g + facet_grid(week ~ .)
+g <- g + ggtitle("Average number of steps of 5-minutes interval\nfor weekday and weekend")
+g <- g + scale_x_continuous(name = "5-minutes Interval",
+                            limits = c(0, 2500), 
+                            breaks = seq(0, 2500, 500))
+g <- g + scale_y_continuous(name = "Number of steps",
+                            limits = c(0, 250), 
+                            breaks = seq(0, 250, 50))
+g <- g + theme(plot.title = element_text(size = 16, face = "bold"))
+g <- g + theme(axis.title.x = element_text(size = 14, face = "bold"),
+	           axis.text.x = element_text(size = 14, face = "bold"))
+g <- g + theme(axis.title.y = element_text(size = 14, face = "bold"),
+	           axis.text.y = element_text(size = 14, face = "bold"))
+g <- g + theme(strip.text.y = element_text(size = 14, face = "bold"),
+               strip.background = element_rect(colour="red", fill="#CCCCFF"))
+g <- g + theme(legend.title = element_text(size = 14))
+g <- g + theme(legend.text = element_text(size = 14))
+print(g)
+```
+
+With some addtional investigation...
+
+mean and median of steps for weekday.  
+```{r, weekday_mean_and_median, echo = TRUE}
+mean(wd$steps)
+median(wd$steps)
+```
+
+And those for weekend.  
+```{r, weekend_mean_and_median, echo = TRUE}
+mean(we$steps)
+median(we$steps)
+```
