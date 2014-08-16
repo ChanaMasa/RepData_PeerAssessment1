@@ -1,0 +1,28 @@
+## Question 1. What is mean total number of steps taken per day?  
+
+Data loading and prep for drawing chart.  
+
+```{r data_loading, echo = TRUE}
+dat <- read.csv(file = "./activity.csv") # with stringsAsFactors = TRUE
+sum.steps <- with(dat, tapply(steps, list(date), function(x) sum(x, na.rm = TRUE) ))
+```
+
+### Q1-1. histogram of the total number of steps taken each day  
+```{r histogram, echo = TRUE, fig.height = 6, fig.width = 6}
+library(ggplot2)
+## a bit of data prep for ggplot2
+sum.steps.df <- data.frame(ymd = names(sum.steps), steps = sum.steps)
+rownames(sum.steps.df) <- 1:nrow(sum.steps)
+
+g <- ggplot(data = sum.steps.df, aes(x = steps))
+g <- g + geom_histogram(color = "white", fill = "olivedrab", binwidth = 2000)
+g <- g + ggtitle("Total number of steps taken per day.")
+print(g)
+
+```
+
+### Q1-2. Mean and median total number of steps taken per day  
+```{r mean_and_median, echo = TRUE}
+mean(sum.steps.df$steps)
+median(sum.steps.df$steps)
+```
